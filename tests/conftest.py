@@ -28,3 +28,28 @@ def sample_docx(tmp_path):
     p = tmp_path / "trimestre.docx"
     doc.save(p)
     return p
+
+
+@pytest.fixture(autouse=True)
+def answer_dialogs(monkeypatch):
+    """Simula la respuesta al diálogo de 'sin guardar' para que nunca bloquee.
+
+    Los tests cambian `answer_dialogs.discard` y leen `answer_dialogs.shown`.
+    """
+    from PySide6.QtWidgets import QMessageBox
+
+    class Answer:
+        discard = True
+        shown = 0
+
+    state = Answer()
+
+    def fake_exec(box):
+        state.shown += 1
+        wanted = QMessageBox.ButtonRole.DestructiveRole if state.discard else QMessageBox.ButtonRole.RejectRole
+        button = next(b for b in box.buttons() if box.buttonRole(b) == wanted)
+        monkeypatch.setattr(box, "clickedButton", lambda: button)
+        return 0
+
+    monkeypatch.setattr(QMessageBox, "exec", fake_exec)
+    return state

@@ -9,6 +9,7 @@ from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import QApplication
 
 from . import __version__
+from .preview import cleanup_drag_temp_dir
 from .window import MainWindow
 
 
@@ -51,6 +52,7 @@ def main() -> int:
     app.setApplicationName("MarkItDown")
     app.setOrganizationName("markitdown-desktop")
     app.setApplicationVersion(__version__)
+    app.aboutToQuit.connect(cleanup_drag_temp_dir)
 
     window = MainWindow()
     app.window = window

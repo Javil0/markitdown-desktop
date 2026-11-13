@@ -19,6 +19,15 @@ App de escritorio para macOS que convierte archivos a Markdown con
   - **Copiar** al portapapeles (⌘⇧C).
 - Opción **"Guardar también el .md junto al archivo original"** (no sobrescribe: crea `nombre (1).md` si ya existe).
 - La conversión va en segundo plano: la ventana nunca se congela.
+- **No pierdes trabajo:** si cierras la app o vacías la lista con conversiones que no has guardado,
+  copiado ni arrastrado a ninguna carpeta, te pregunta antes.
+
+## Qué pasa con tus archivos
+
+- **Originales:** la app solo los lee; nunca los mueve, copia ni borra.
+- **Lista y Markdown en pantalla:** solo existen mientras la app está abierta.
+- **Los `.md` que guardas o arrastras** se quedan donde los pusiste.
+- **Copias temporales** (las que se crean al arrastrar el `.md` fuera de la app): se borran al cerrar la app.
 
 ## Instalación (sin Python)
 

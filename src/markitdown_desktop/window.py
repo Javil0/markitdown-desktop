@@ -52,6 +52,7 @@ class JobState:
     path: Path
     markdown: str | None = None
     error: str | None = None
+    exported: bool = False  # guardado, copiado o arrastrado fuera
 
 
 def unique_path(path: Path) -> Path:
@@ -113,6 +114,7 @@ class MainWindow(QMainWindow):
         self.preview.copy_requested.connect(self.copy_current)
         self.preview.save_requested.connect(self.save_current)
         self.preview.text_edited.connect(self._on_text_edited)
+        self.preview.drag_handle.dragged_out.connect(self._mark_current_exported)
 
         self._build_menu()
 
@@ -161,6 +163,7 @@ class MainWindow(QMainWindow):
             try:
                 target = unique_path(job.path.with_name(markdown_filename(job.path)))
                 target.write_text(markdown, encoding="utf-8")
+                job.exported = True
                 message += f" → guardado en {target}"
             except OSError as exc:
                 message += f" (no se pudo guardar junto al original: {exc})"
@@ -182,6 +185,12 @@ class MainWindow(QMainWindow):
         job = self.jobs.get(self.current_job)
         if job is not None and job.markdown is not None:
             job.markdown = text
+            job.exported = False
+
+    def _mark_current_exported(self):
+        job = self.jobs.get(self.current_job)
+        if job is not None:
+            job.exported = True
 
     # --- vista ----------------------------------------------------------
     def show_job(self, job_id: int):
@@ -199,6 +208,7 @@ class MainWindow(QMainWindow):
     def copy_current(self):
         if self.preview.has_document():
             self.preview.copy_to_clipboard()
+            self._mark_current_exported()
             self.statusBar().showMessage("Markdown copiado al portapapeles", 3000)
 
     def save_current(self):
@@ -220,10 +230,44 @@ class MainWindow(QMainWindow):
         except OSError as exc:
             QMessageBox.warning(self, "No se pudo guardar", str(exc))
             return
+        self._mark_current_exported()
         self.settings.setValue("last_save_dir", str(target.parent))
         self.statusBar().showMessage(f"Guardado en {target}", 5000)
 
+    # --- salir sin perder trabajo ------------------------------------------
+    def unsaved_jobs(self) -> list[JobState]:
+        return [j for j in self.jobs.values() if j.markdown is not None and not j.exported]
+
+    def confirm_discard(self, action: str) -> bool:
+        """Pregunta antes de perder conversiones que no se han guardado ni copiado."""
+        unsaved = self.unsaved_jobs()
+        if not unsaved:
+            return True
+        names = "\n".join(f"• {j.path.name}" for j in unsaved[:8])
+        if len(unsaved) > 8:
+            names += f"\n… y {len(unsaved) - 8} más"
+        n = len(unsaved)
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle("Conversiones sin guardar")
+        box.setText(
+            f"Hay {n} conversi{'ones' if n != 1 else 'ón'} que no has guardado, copiado ni arrastrado a ninguna carpeta."
+        )
+        box.setInformativeText(f"{names}\n\nSi continúas, se perderán.")
+        discard = box.addButton(action, QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton("Cancelar", QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        return box.clickedButton() is discard
+
+    def closeEvent(self, event):
+        if self.confirm_discard("Cerrar igualmente"):
+            event.accept()
+        else:
+            event.ignore()
+
     def clear(self):
+        if not self.confirm_discard("Vaciar igualmente"):
+            return
         self.jobs.clear()
         self.drop_panel.list.clear()
         self.show_job(0)

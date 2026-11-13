@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -31,6 +32,14 @@ def drag_temp_dir() -> Path:
     return _drag_dir
 
 
+def cleanup_drag_temp_dir() -> None:
+    """Borra las copias temporales creadas al arrastrar (se llama al cerrar la app)."""
+    global _drag_dir
+    if _drag_dir is not None:
+        shutil.rmtree(_drag_dir, ignore_errors=True)
+        _drag_dir = None
+
+
 def write_temp_markdown(filename: str, text: str) -> Path:
     """Escribe el .md en una subcarpeta propia para no pisar otros con el mismo nombre."""
     folder = Path(tempfile.mkdtemp(dir=drag_temp_dir()))
@@ -41,6 +50,8 @@ def write_temp_markdown(filename: str, text: str) -> Path:
 
 class DragHandle(QLabel):
     """Icono que se arrastra al Finder para soltar el .md en una carpeta."""
+
+    dragged_out = Signal()  # el .md se soltó en algún sitio
 
     def __init__(self, provider, parent: QWidget | None = None):
         super().__init__(parent)
@@ -90,8 +101,10 @@ class DragHandle(QLabel):
         drag.setPixmap(pixmap)
         drag.setHotSpot(QPoint(pixmap.width() // 2, pixmap.height() // 2))
         self.setCursor(Qt.CursorShape.ClosedHandCursor)
-        drag.exec(Qt.DropAction.CopyAction)
+        result = drag.exec(Qt.DropAction.CopyAction)
         self.setCursor(Qt.CursorShape.OpenHandCursor)
+        if result != Qt.DropAction.IgnoreAction:
+            self.dragged_out.emit()
 
 
 class PreviewPanel(QWidget):

@@ -95,3 +95,63 @@ def test_unique_path(tmp_path):
     assert unique_path(p) == p
     p.write_text("")
     assert unique_path(p).name == "x (1).md"
+
+
+def test_close_asks_when_unsaved(qtbot, settings, sample_html, answer_dialogs):
+    w = make_window(qtbot, settings)
+    w.show()
+    w.add_files([sample_html])
+    wait_done(qtbot, w)
+    answer_dialogs.discard = False
+    assert w.close() is False  # el usuario pulsa Cancelar
+    assert answer_dialogs.shown == 1
+    answer_dialogs.discard = True
+    assert w.close() is True
+
+
+def test_no_question_after_copy_or_drag(qtbot, settings, sample_html, answer_dialogs):
+    w = make_window(qtbot, settings)
+    w.add_files([sample_html])
+    wait_done(qtbot, w)
+    w.copy_current()
+    assert w.unsaved_jobs() == []
+    w.preview.editor.setPlainText("# Cambiado")  # editar después vuelve a contar como sin guardar
+    assert len(w.unsaved_jobs()) == 1
+    w.preview.drag_handle.dragged_out.emit()
+    assert w.unsaved_jobs() == []
+    w.close()
+    assert answer_dialogs.shown == 0
+
+
+def test_errors_do_not_count_as_unsaved(qtbot, settings, tmp_path):
+    w = make_window(qtbot, settings)
+    w.add_files([tmp_path / "fantasma.pdf"])
+    wait_done(qtbot, w)
+    assert w.unsaved_jobs() == []
+
+
+def test_clear_asks_too(qtbot, settings, sample_html, answer_dialogs):
+    w = make_window(qtbot, settings)
+    w.add_files([sample_html])
+    wait_done(qtbot, w)
+    answer_dialogs.discard = False
+    w.clear()
+    assert w.drop_panel.list.count() == 1
+    answer_dialogs.discard = True
+    w.clear()
+    assert w.drop_panel.list.count() == 0
+
+
+def test_temp_dir_is_removed(qtbot, settings, sample_html):
+    from markitdown_desktop import preview
+
+    w = make_window(qtbot, settings)
+    w.add_files([sample_html])
+    wait_done(qtbot, w)
+    path = Path(w.preview.drag_handle.build_mime().urls()[0].toLocalFile())
+    temp_root = preview.drag_temp_dir()
+    assert path.exists()
+    preview.cleanup_drag_temp_dir()
+    assert not temp_root.exists()
+    # Se puede volver a arrastrar después: crea una carpeta nueva
+    assert Path(w.preview.drag_handle.build_mime().urls()[0].toLocalFile()).exists()
